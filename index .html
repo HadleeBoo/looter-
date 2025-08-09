@@ -1,0 +1,913 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>D&D Loot & Shop Generator — DM/Player Suite</title>
+<style>
+  :root{
+    --bg:#0f1220;--bg2:#161a2d;--fg:#e7eaf6;--muted:#aab1d5;--ac:#6dd3fb;--ac2:#ffb86b;
+    --ok:#36d399;--warn:#fbbf24;--bad:#f472b6;--border:#2a3158;--card:#151935;--shadow:0 10px 20px rgba(0,0,0,.35);
+    --rare:#59f;--uncommon:#4caf50;--very-rare:#a855f7;--legendary:#f59e0b;--common:#b6c2ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:linear-gradient(180deg,var(--bg),#0b0e1a 60%);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+  header{position:sticky;top:0;z-index:50;background:rgba(10,14,32,.7);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .wrap{max-width:1200px;margin:0 auto;padding:12px}
+  h1{font-size:clamp(18px,3vw,26px);margin:4px 0 8px 0}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap}
+  .tab{padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);cursor:pointer;user-select:none;transition:.15s;box-shadow:var(--shadow);font-weight:600}
+  .tab[aria-selected="true"]{outline:2px solid var(--ac);background:#121532}
+  main{max-width:1200px;margin:0 auto;padding:16px;display:grid;gap:16px}
+  section.card{border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:14px}
+  section.card h2{margin:2px 0 8px 0;font-size:clamp(16px,2.4vw,22px)}
+  .grid{display:grid;gap:12px}
+  @media(min-width:900px){ .grid-2{grid-template-columns:1fr 1fr} .grid-3{grid-template-columns:repeat(3,1fr)} }
+  label{display:flex;gap:8px;align-items:center;margin:6px 0;color:var(--muted);font-size:14px}
+  input,select,textarea,button{font:inherit}
+  input[type="text"], input[type="number"], select, textarea{
+    background:#0d1228;border:1px solid var(--border);color:var(--fg);padding:8px 10px;border-radius:10px;width:100%;
+  }
+  textarea{min-height:80px;resize:vertical}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#101636;color:var(--fg);cursor:pointer;transition:.15s;font-weight:600}
+  .btn:hover{transform:translateY(-1px);}
+  .btn.primary{background:linear-gradient(90deg,#17419b,#0ea5e9);border-color:transparent}
+  .btn.warn{background:linear-gradient(90deg,#b45309,#f59e0b);border-color:transparent}
+  .btn.ghost{background:transparent}
+  .muted{color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);padding:4px 8px;border-radius:999px;font-size:12px;background:#101532}
+  .divider{height:1px;background:var(--border);margin:10px 0}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap}
+  .kpi .card{padding:8px 10px;border-radius:12px;background:#0e1431;border:1px solid var(--border)}
+  .rare{border-left:4px solid var(--rare)}
+  .uncommon{border-left:4px solid var(--uncommon)}
+  .very-rare{border-left:4px solid var(--very-rare)}
+  .legendary{border-left:4px solid var(--legendary)}
+  .common{border-left:4px solid var(--common)}
+  .glow{box-shadow:0 0 0 1px rgba(255,255,255,.04),0 0 14px rgba(109,211,251,.35)}
+  /* Loot reveal animation */
+  .reveal{position:relative;overflow:hidden}
+  .reveal::after{
+    content:"";position:absolute;inset:0;background:radial-gradient(1200px 300px at var(--sx,50%) -10%, rgba(255,255,255,.35), transparent 45%);
+    opacity:0;animation:shine 1.2s ease-out
+  }
+  @keyframes shine{0%{opacity:0}30%{opacity:.9}100%{opacity:0;transform:translateX(120%)}}  
+  /* Loot log */
+  #lootLog{min-height:120px;max-height:250px;overflow:auto;background:#0b1028;border:1px dashed var(--border);padding:10px;border-radius:12px}
+  .log-entry{padding:8px;border-bottom:1px dashed var(--border)}
+  .log-entry:last-child{border-bottom:none}
+  /* Mobile helpers */
+  .sticky-actions{position:sticky;bottom:10px;display:flex;gap:8px;flex-wrap:wrap}
+  /* Toggle switch */
+  .switch{position:relative;display:inline-block;width:46px;height:24px}
+  .switch input{display:none}
+  .slider{position:absolute;cursor:pointer;inset:0;background:#222a4a;border-radius:999px;transition:.2s;border:1px solid var(--border)}
+  .slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;top:2.5px;background:white;border-radius:50%;transition:.2s}
+  input:checked + .slider{background:#0ea5e9}
+  input:checked + .slider:before{transform:translateX(22px)}
+  .small{font-size:12px}
+  .right{margin-left:auto}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>⚔️ D&D Loot & Shop Generator <span class="muted">— DM & Player Suite</span></h1>
+    <div class="tabs" id="tabs">
+      <button class="tab" data-tab="players" aria-selected="true">Players</button>
+      <button class="tab" data-tab="loot">Loot</button>
+      <button class="tab" data-tab="shop">Shop</button>
+      <button class="tab" data-tab="dm">DM Tools</button>
+      <button class="tab" data-tab="custom">Custom Pools</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+  </div>
+</header>
+
+<main id="view">
+  <!-- PLAYERS -->
+  <section class="card" data-view="players">
+    <h2>Players & Inventories</h2>
+    <div class="grid grid-2">
+      <div>
+        <label>Party Members (select to target recipients)
+          <select id="playerSelect" multiple size="7" aria-label="Party Members">
+            <option>Gage</option>
+            <option>Adam</option>
+            <option>Muy</option>
+            <option>Andrew</option>
+            <option>Sean</option>
+            <option>Jade</option>
+            <option>Brooke</option>
+          </select>
+        </label>
+        <div class="row">
+          <button class="btn" id="addPlayerBtn">Add Player</button>
+          <input type="text" id="newPlayerName" placeholder="New player name" />
+          <button class="btn warn" id="removePlayerBtn" title="Remove selected">Remove</button>
+        </div>
+        <div class="divider"></div>
+        <div class="kpi">
+          <div class="card"><b>Total Gold:</b> <span id="totalGold">0</span></div>
+          <div class="card"><b>Total Items:</b> <span id="totalItems">0</span></div>
+          <div class="card"><b>Curse Mode:</b> 
+            <label class="switch">
+              <input type="checkbox" id="curseToggle"><span class="slider"></span>
+            </label>
+          </div>
+          <div class="card"><b>Daily Event:</b> <span id="dailyEventText" class="muted">—</span></div>
+        </div>
+      </div>
+      <div>
+        <h3>Selected Player Inventory</h3>
+        <div id="inventoryList" aria-live="polite" class="small muted">Select a player to view inventory.</div>
+        <div class="row sticky-actions">
+          <button class="btn" id="grantGoldBtn">+50g to selected</button>
+          <button class="btn" id="removeItemBtn">Remove last item</button>
+          <button class="btn" id="exportInventoriesBtn">Export Inventories</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOOT -->
+  <section class="card" data-view="loot" hidden>
+    <h2>Loot Generator</h2>
+    <div class="grid grid-3">
+      <div>
+        <label>Theme / Biome
+          <select id="themeSelect">
+            <option value="general">General</option>
+            <option value="dungeon">Dungeon</option>
+            <option value="forest">Forest</option>
+            <option value="desert">Desert</option>
+            <option value="underdark">Underdark</option>
+            <option value="dragon_cult">Dragon Cult (HotDQ)</option>
+          </select>
+        </label>
+        <label>Filter by Type
+          <select id="typeFilter">
+            <option value="any">Any</option>
+            <option value="weapon">Weapon</option>
+            <option value="armor">Armor</option>
+            <option value="consumable">Consumable</option>
+            <option value="trinket">Trinket</option>
+            <option value="scroll">Scroll</option>
+            <option value="tool">Tool</option>
+            <option value="story">Story Hook</option>
+          </select>
+        </label>
+        <label>Quantity <input id="qty" type="range" min="1" max="10" step="1" value="1" /></label>
+        <div class="row small"><span id="qtyVal" class="pill">1</span></div>
+        <label>Weighted Table
+          <select id="rarityWeight">
+            <option value="balanced">Balanced</option>
+            <option value="common">Common-Heavy</option>
+            <option value="rare">Rare-Heavy</option>
+            <option value="chaos">Chaos</option>
+          </select>
+        </label>
+        <label class="row">Language/Script
+          <select id="langSelect">
+            <option value="common">Common</option>
+            <option value="elvish">Elvish</option>
+            <option value="dwarvish">Dwarvish</option>
+            <option value="draconic">Draconic</option>
+          </select>
+        </label>
+        <label class="row">DM Secret Notes <textarea id="dmNotes" placeholder="Hidden notes for this roll..."></textarea></label>
+        <div class="row">
+          <button class="btn primary" id="previewBtn">Preview</button>
+          <button class="btn" id="finalizeBtn" disabled>Finalize to Log</button>
+        </div>
+      </div>
+      <div>
+        <h3>Preview</h3>
+        <div id="previewArea" class="grid reveal" style="gap:8px"></div>
+        <div class="row">
+          <button class="btn ghost" id="rerollBtn">Reroll</button>
+          <button class="btn" id="giveToSelectedBtn" title="Give previewed loot to selected players">Give to Selected</button>
+        </div>
+      </div>
+      <div>
+        <h3>Loot Log</h3>
+        <div id="lootLog" aria-live="polite"></div>
+        <div class="row">
+          <button class="btn" id="exportLogBtn">Export Log</button>
+          <button class="btn warn" id="clearLogBtn">Clear Log</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOP -->
+  <section class="card" data-view="shop" hidden>
+    <h2>Shop & Barter</h2>
+    <div class="grid grid-3">
+      <div>
+        <label>Trader Level <input id="traderLevel" type="number" min="1" max="20" value="5" /></label>
+        <label>Trader Gold (budget to buy from you) <input id="traderGold" type="number" min="0" value="500" /></label>
+        <label>Shopkeeper Mood
+          <select id="moodSelect">
+            <option value="neutral">Neutral</option>
+            <option value="friendly">Friendly</option>
+            <option value="greedy">Greedy</option>
+            <option value="suspicious">Suspicious</option>
+          </select>
+        </label>
+        <label>Your Party Face Charisma (mod) <input id="chaMod" type="number" value="3" /></label>
+        <div class="row">
+          <button class="btn primary" id="genShopBtn">Generate Inventory</button>
+          <button class="btn" id="refreshSaleBtn">Roll Daily Sale</button>
+        </div>
+      </div>
+      <div>
+        <h3>Inventory</h3>
+        <div id="shopList" class="grid" style="gap:8px"></div>
+      </div>
+      <div>
+        <h3>Sell / Trade</h3>
+        <div class="row">
+          <input id="sellItemName" type="text" placeholder="Item name" />
+          <input id="sellItemBase" type="number" placeholder="Base price (g)" />
+          <button class="btn" id="sellCalcBtn">Appraise & Offer</button>
+        </div>
+        <div id="sellOffer" class="muted small">Enter an item to appraise.</div>
+        <div class="divider"></div>
+        <div class="row">
+          <button class="btn" id="completeSaleBtn">Complete Sale to Trader</button>
+          <span class="pill">Trader Gold: <b id="traderGoldRead">500</b>g</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DM TOOLS -->
+  <section class="card" data-view="dm" hidden>
+    <h2>DM Tools</h2>
+    <div class="grid grid-2">
+      <div>
+        <h3>Story Items & Hooks</h3>
+        <div class="row">
+          <input id="storyItem" type="text" placeholder="Add a story item (hidden in DM rolls)" />
+          <button class="btn" id="addStoryItemBtn">Add</button>
+        </div>
+        <div id="storyItemsList" class="small muted">No story items yet.</div>
+        <div class="divider"></div>
+        <h3>Chest Locks / Traps</h3>
+        <div class="row">
+          <button class="btn" id="genLockBtn">Generate Lock</button>
+          <button class="btn" id="genTrapBtn">Generate Trap/Encounter</button>
+        </div>
+        <div id="trapArea" class="small muted"></div>
+        <div class="divider"></div>
+        <h3>Initiative</h3>
+        <div class="row">
+          <input id="enemyNames" type="text" placeholder="Comma-separated enemy names" />
+          <button class="btn" id="rollInitBtn">Roll Initiative</button>
+        </div>
+        <div id="initResults" class="small"></div>
+      </div>
+      <div>
+        <h3>DM Secrets</h3>
+        <label>Private Notes (session)
+          <textarea id="dmScratch" placeholder="Notes only you can see. Stored locally."></textarea>
+        </label>
+        <div class="row">
+          <button class="btn" id="exportSecretsBtn">Export Secrets</button>
+          <button class="btn warn" id="clearSecretsBtn">Clear</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CUSTOM POOLS -->
+  <section class="card" data-view="custom" hidden>
+    <h2>Custom Loot Pools</h2>
+    <div class="grid grid-2">
+      <div>
+        <h3>Create / Import</h3>
+        <label>Name <input id="poolName" type="text" placeholder="Pool Name (e.g., Kaen's Shadowflame)" /></label>
+        <label>JSON Items <textarea id="poolJson" placeholder='[{"name":"Shadowflame Dagger","type":"weapon","rarity":"rare","basePrice":250}]'></textarea></label>
+        <div class="row">
+          <button class="btn" id="savePoolBtn">Save Pool</button>
+          <button class="btn" id="importDemoPoolBtn">Load Demo Pools</button>
+        </div>
+      </div>
+      <div>
+        <h3>Manage</h3>
+        <label>Active Pool
+          <select id="activePoolSelect"><option value="">(none)</option></select>
+        </label>
+        <div id="poolPreview" class="small muted">No pool selected.</div>
+        <div class="row">
+          <button class="btn" id="exportPoolsBtn">Export Pools</button>
+          <button class="btn warn" id="clearPoolsBtn">Delete All Pools</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="card" data-view="history" hidden>
+    <h2>Roll History</h2>
+    <div id="historyArea" class="small muted">No history yet.</div>
+    <div class="row">
+      <button class="btn" id="exportHistoryBtn">Export History</button>
+      <button class="btn warn" id="clearHistoryBtn">Clear History</button>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="card" data-view="settings" hidden>
+    <h2>Settings</h2>
+    <div class="grid grid-2">
+      <div>
+        <label class="row">DM Mode 
+          <label class="switch">
+            <input type="checkbox" id="dmModeToggle"><span class="slider"></span>
+          </label>
+          <span class="small muted">Not a security feature — just hides spoilers.</span>
+        </label>
+        <label>Seed (optional for reproducible rolls) <input id="seedInput" type="text" placeholder="e.g., session-aug-9" /></label>
+        <div class="row">
+          <button class="btn" id="saveSettingsBtn">Save</button>
+          <button class="btn warn" id="resetAllBtn">Reset Everything</button>
+        </div>
+      </div>
+      <div>
+        <h3>About</h3>
+        <p class="small muted">All data is stored locally in your browser (localStorage). Works offline. Built for iPhone and laptop.</p>
+        <p class="small muted">Rarity glow: <span class="pill" style="border-color:transparent;background:var(--common)">Common</span> <span class="pill" style="border-color:transparent;background:var(--uncommon)">Uncommon</span> <span class="pill" style="border-color:transparent;background:var(--rare)">Rare</span> <span class="pill" style="border-color:transparent;background:var(--very-rare)">Very Rare</span> <span class="pill" style="border-color:transparent;background:var(--legendary)">Legendary</span></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  // ---------- Utilities & Persistence ----------
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const storage = {
+    get(k, fallback){ try {return JSON.parse(localStorage.getItem(k)) ?? fallback} catch(e){return fallback}},
+    set(k, v){ localStorage.setItem(k, JSON.stringify(v)); },
+    del(k){ localStorage.removeItem(k); }
+  };
+  const STATE = storage.get("loot_state_v2", {
+    players:["Gage","Adam","Muy","Andrew","Sean","Jade","Brooke"].map(name => ({name,gold:0,items:[]})),
+    lootLog:[],
+    history:[],
+    dm:{mode:false,notes:"",storyItems:[]},
+    settings:{seed:"",curse:false},
+    pools:{}, activePool:"",
+    shop:{traderLevel:5,traderGold:500,mood:"neutral",inventory:[]}
+  });
+
+  const saveState = () => storage.set("loot_state_v2", STATE);
+
+  // Seeded RNG (optional)
+  let _seedStr = STATE.settings.seed || "";
+  function xmur3(str){ for(var i=0,h=1779033703 ^ str.length;i<str.length;i++){h=Math.imul(h ^ str.charCodeAt(i),3432918353);h=h<<13|h>>>19} return function(){h=Math.imul(h ^ (h>>>16),2246822507);h=Math.imul(h ^ (h>>>13),3266489909); return (h^=h>>>16)>>>0} }
+  function mulberry32(a){ return function(){ var t = a += 0x6D2B79F5; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } }
+  const rand = (()=>{
+    if(!_seedStr) return Math.random;
+    const seed = xmur3(_seedStr)();
+    return mulberry32(seed);
+  })();
+
+  const roll = (n=20)=> Math.floor(rand()*n)+1;
+  const choice = arr => arr[Math.floor(rand()*arr.length)];
+  const clamp = (n,min,max)=> Math.min(max, Math.max(min, n));
+
+  // ---------- Tabs ----------
+  const tabs = $("#tabs");
+  const view = $("#view");
+  tabs.addEventListener("click", (e)=>{
+    const t = e.target.closest(".tab"); if(!t) return;
+    $$(".tab").forEach(b=>b.setAttribute("aria-selected", String(b===t)));
+    const id = t.dataset.tab;
+    $$("section.card").forEach(sec => sec.hidden = sec.dataset.view !== id);
+    if(id==="history") renderHistory();
+    if(id==="players") renderPlayers();
+    if(id==="shop") { $("#traderGoldRead").textContent = STATE.shop.traderGold; renderShop(); }
+  });
+
+  // ---------- Default Pools (themed) ----------
+  const BASE_ITEMS = [
+    // name, type, rarity, basePrice, themes[]
+    ["Shortsword","weapon","common",10,["general","dungeon","forest"]],
+    ["Longsword","weapon","uncommon",15,["general","dungeon"]],
+    ["Dagger","weapon","common",2,["general","forest","desert","underdark"]],
+    ["Studded Leather Armor","armor","uncommon",45,["general"]],
+    ["Chain Shirt","armor","uncommon",50,["general","dungeon"]],
+    ["Health Potion","consumable","common",50,["general","dungeon","forest","desert"]],
+    ["Greater Healing Potion","consumable","rare",150,["general","dungeon"]],
+    ["Antitoxin","consumable","uncommon",50,["forest","underdark","desert"]],
+    ["Thieves' Tools","tool","uncommon",25,["dungeon","general"]],
+    ["Scroll of Identify","scroll","uncommon",100,["general","dungeon"]],
+    ["Scroll of Fireball","scroll","rare",300,["dungeon","dragon_cult"]],
+    ["Ring of Warmth","trinket","rare",300,["desert","general"]],
+    ["Cloak of Elvenkind","armor","very-rare",1000,["forest"]],
+    ["Drakefang Charm","trinket","rare",400,["dragon_cult","dungeon"]],
+    ["Shadowflame Tonic","consumable","uncommon",75,["underdark","dragon_cult"]],
+    ["Everburning Ember","trinket","very-rare",1500,["dragon_cult"]],
+    ["Map Fragment","story","common",0,["general","dungeon"]],
+    ["Ancient Key","story","uncommon",0,["dungeon","underdark"]],
+    ["Cursed Coin","trinket","uncommon",1,["general","underdark"]],
+    ["Desert Compass","tool","uncommon",30,["desert"]],
+    ["Elven Leaf Token","trinket","uncommon",35,["forest"]]
+  ].map(([name,type,rarity,basePrice,themes])=>({name,type,rarity,basePrice,themes}));
+
+  // Easter eggs (super rare)
+  const EASTER = [
+    {name:"Bag of Infinite Socks",type:"trinket",rarity:"legendary",basePrice:1,themes:["general"]},
+    {name:"Potion of Mild Inconvenience",type:"consumable",rarity:"rare",basePrice:5,themes:["general"]}
+  ];
+
+  // Rarity weights
+  const WEIGHTS = {
+    balanced: {common:55, uncommon:30, rare:10, "very-rare":4, legendary:1},
+    common:   {common:75, uncommon:18, rare:5,  "very-rare":1, legendary:1},
+    rare:     {common:35, uncommon:34, rare:20, "very-rare":8, legendary:3},
+    chaos:    {common:25, uncommon:25, rare:25, "very-rare":15, legendary:10}
+  };
+
+  // ---------- Multi-language flavor (simple cipher) ----------
+  function translate(text, lang){
+    if(lang==="common") return text;
+    const alpha = "abcdefghijklmnopqrstuvwxyz";
+    const shift = {elvish:3, dwarvish:7, draconic:11}[lang] || 0;
+    return text.replace(/[a-z]/gi, ch=>{
+      const lower = ch===ch.toLowerCase();
+      const idx = alpha.indexOf(ch.toLowerCase());
+      if(idx<0) return ch;
+      const out = alpha[(idx+shift)%alpha.length];
+      return lower ? out : out.toUpperCase();
+    });
+  }
+
+  // ---------- Daily Event ----------
+  function rollDailyEvent(){
+    const events = [
+      "Traveling merchant offers 10% off consumables",
+      "Blacksmith overstock: 15% off weapons",
+      "Arcane shortage: scrolls +20% price",
+      "Festive market: trinkets rotate twice today",
+      "Quiet day — no special events"
+    ];
+    const ev = choice(events);
+    $("#dailyEventText").textContent = ev;
+    storage.set("loot_daily_event", {text:ev, date: new Date().toDateString()});
+  }
+  const evStored = storage.get("loot_daily_event", null);
+  if(!evStored || evStored.date !== new Date().toDateString()){ rollDailyEvent(); } else { $("#dailyEventText").textContent = evStored.text; }
+
+  // ---------- Render Players & Inventories ----------
+  function renderPlayers(){
+    // Update list
+    const sel = $("#playerSelect");
+    sel.innerHTML = "";
+    STATE.players.forEach(p=>{
+      const opt = document.createElement("option");
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    // KPIs
+    $("#totalGold").textContent = STATE.players.reduce((s,p)=>s+p.gold,0);
+    $("#totalItems").textContent = STATE.players.reduce((s,p)=>s+p.items.length,0);
+    // Inventory view
+    renderInventory();
+  }
+  function selectedPlayerIndex(){ return $("#playerSelect").selectedIndex; }
+  function getSelectedPlayer(){ const i = selectedPlayerIndex(); return i>=0 ? STATE.players[i] : null; }
+  function renderInventory(){
+    const inv = $("#inventoryList");
+    const p = getSelectedPlayer();
+    if(!p){ inv.textContent = "Select a player to view inventory."; return; }
+    if(!p.items.length){ inv.innerHTML = `<p>${p.name} has no items. Gold: ${p.gold}g</p>`; return; }
+    inv.innerHTML = `<p><b>${p.name}</b> — Gold: <b>${p.gold}g</b></p>` + p.items.map((it,idx)=>{
+      return `<div class="log-entry ${it.rarity}">
+        <b>${it.name}</b> <span class="pill">${it.type}</span> <span class="pill">${it.rarity}</span>
+        ${it.condition ? `<span class="pill">cond: ${it.condition}</span>`:""}
+        ${it.cursed ? `<span class="pill" style="background:var(--bad)">cursed</span>`:""}
+        ${it.durability!=null ? `<span class="pill">dur ${it.durability}%</span>`:""}
+      </div>`
+    }).join("");
+  }
+
+  // ---------- Loot Generation ----------
+  const qty = $("#qty"); const qtyVal=$("#qtyVal");
+  qty.addEventListener("input",()=> qtyVal.textContent = qty.value);
+
+  function buildPool(){
+    const theme = $("#themeSelect").value;
+    const type = $("#typeFilter").value;
+    let items = BASE_ITEMS.filter(i => i.themes.includes(theme) || theme==="general");
+    if(type!=="any") items = items.filter(i => i.type===type);
+    // Story items injected from DM list
+    const story = STATE.dm.storyItems.map(n=>({name:n,type:"story",rarity:"uncommon",basePrice:0,themes:[theme]}));
+    items = items.concat(story);
+    // Custom active pool
+    if(STATE.activePool && STATE.pools[STATE.activePool]){
+      items = items.concat(STATE.pools[STATE.activePool]);
+    }
+    // Chance for easter egg
+    if(rand()<0.03) items = items.concat(EASTER);
+    return items;
+  }
+
+  function pickByRarity(items, weightKey){
+    const weights = WEIGHTS[weightKey] || WEIGHTS.balanced;
+    const bag = [];
+    Object.entries(weights).forEach(([rarity,w])=>{
+      const subset = items.filter(i => i.rarity===rarity);
+      for(let k=0;k<w;k++) bag.push(...subset);
+    });
+    return bag.length ? choice(bag) : choice(items);
+  }
+
+  function conditionize(item){
+    // Random condition / durability, curse
+    const out = {...item};
+    const condRoll = roll(100);
+    if(condRoll<8){ out.condition = "cracked"; out.durability = clamp(50 + Math.floor(rand()*30), 10, 90); }
+    else if(condRoll>95){ out.condition = "masterwork"; out.durability = 100; }
+    if($("#curseToggle").checked && rand()<0.08){ out.cursed = true; }
+    // Quest hook note
+    if(item.type!=="story" && rand()<0.12){
+      out.hook = choice(["scribbled map on the wrapping","insignia of a fallen knight","bloodstain forming a symbol","tiny note: 'Meet at dusk'"]);
+    }
+    return out;
+  }
+
+  let lastPreview = [];
+  function generatePreview(){
+    const items = buildPool();
+    const weightKey = $("#rarityWeight").value;
+    const count = parseInt($("#qty").value,10);
+    const lang = $("#langSelect").value;
+    lastPreview = Array.from({length:count},()=> conditionize(pickByRarity(items, weightKey)))
+      .map(it => ({...it, id: crypto.randomUUID()}));
+
+    // Render preview
+    const area = $("#previewArea");
+    area.innerHTML = "";
+    lastPreview.forEach(it=>{
+      const card = document.createElement("div");
+      card.className = `card glow ${it.rarity}`;
+      const desc = translate(`${it.name}`, lang);
+      card.innerHTML = `
+        <div><b>${desc}</b> <span class="pill">${it.type}</span> <span class="pill">${it.rarity}</span></div>
+        <div class="small muted">${it.condition?`Condition: ${it.condition}. `:""}${it.cursed?"Cursed. ":""}${it.hook?`Hook: ${it.hook}`:""}</div>
+      `;
+      area.appendChild(card);
+      // animation spark
+      area.style.setProperty("--sx", Math.floor(rand()*100)+"%");
+      area.classList.remove("reveal"); void area.offsetWidth; area.classList.add("reveal");
+    });
+    $("#finalizeBtn").disabled = lastPreview.length===0;
+  }
+
+  $("#previewBtn").addEventListener("click", generatePreview);
+  $("#rerollBtn").addEventListener("click", generatePreview);
+  $("#finalizeBtn").addEventListener("click", ()=>{
+    if(!lastPreview.length) return;
+    const entry = {
+      ts: Date.now(),
+      items: lastPreview,
+      theme: $("#themeSelect").value,
+      type: $("#typeFilter").value,
+      notes: $("#dmNotes").value
+    };
+    STATE.lootLog.push(entry);
+    STATE.history.push({ts:entry.ts, kind:"loot", details:`${lastPreview.length} items from ${entry.theme}/${entry.type}`});
+    saveState();
+    renderLog();
+    $("#dmNotes").value="";
+    lastPreview = [];
+    $("#previewArea").innerHTML = "";
+    $("#finalizeBtn").disabled = true;
+  });
+
+  function renderLog(){
+    const log = $("#lootLog");
+    if(!STATE.lootLog.length){ log.textContent = "No loot yet."; return; }
+    log.innerHTML = STATE.lootLog.map(ent=>{
+      const date = new Date(ent.ts).toLocaleString();
+      const inner = ent.items.map(it=>`<div class="small"><b>${it.name}</b> <span class="pill">${it.type}</span> <span class="pill">${it.rarity}</span>${it.cursed?` <span class="pill" style="background:var(--bad)">cursed</span>`:""} ${it.hook?`<i class="muted">(${it.hook})</i>`:""}</div>`).join("");
+      return `<div class="log-entry"><div class="muted small">${date} — ${ent.theme}/${ent.type}</div>${inner}${ent.notes?`<div class="small muted">DM: ${ent.notes}</div>`:""}</div>`;
+    }).join("");
+  }
+  renderLog();
+
+  // Give to selected players
+  $("#giveToSelectedBtn").addEventListener("click", ()=>{
+    if(!lastPreview.length) return;
+    const sel = $("#playerSelect");
+    const indices = Array.from(sel.selectedOptions).map(o=> Array.from(sel.options).indexOf(o));
+    if(indices.length===0){ alert("Select one or more players first."); return; }
+    lastPreview.forEach((it, idx)=>{
+      const target = indices[idx % indices.length];
+      STATE.players[target].items.push(it);
+    });
+    saveState();
+    renderPlayers();
+    alert("Items assigned to selected players.");
+  });
+
+  // ---------- Shop / Barter ----------
+  function renderShop(){
+    const list = $("#shopList");
+    const inv = STATE.shop.inventory;
+    if(!inv.length){ list.innerHTML = `<div class="muted small">Generate an inventory to begin.</div>`; return; }
+    list.innerHTML = inv.map((it, i)=>{
+      return `<div class="card ${it.rarity}">
+        <div class="row">
+          <b>${it.name}</b> <span class="pill">${it.type}</span> <span class="pill">${it.rarity}</span> <span class="right pill">${Math.round(it.price)}g</span>
+        </div>
+        <div class="small muted">${it.note || "—"}</div>
+        <div class="row">
+          <button class="btn" data-buy="${i}">Buy</button>
+        </div>
+      </div>`;
+    }).join("");
+    // Hook buy buttons
+    list.querySelectorAll("[data-buy]").forEach(btn=>{
+      btn.addEventListener("click", (e)=>{
+        const idx = parseInt(e.currentTarget.dataset.buy,10);
+        const item = STATE.shop.inventory[idx];
+        if(!item) return;
+        // Who buys?
+        const p = getSelectedPlayer();
+        if(!p){ alert("Select a player (Players tab) to buy."); return; }
+        if(p.gold < item.price){ alert(`${p.name} doesn't have enough gold.`); return; }
+        p.gold -= Math.round(item.price);
+        p.items.push(item);
+        STATE.history.push({ts:Date.now(), kind:"buy", details:`${p.name} bought ${item.name} for ${Math.round(item.price)}g`});
+        saveState();
+        renderPlayers();
+        alert(`${p.name} bought ${item.name}.`);
+      });
+    });
+  }
+
+  function priceModFromMood(mood){
+    switch(mood){
+      case "friendly": return 0.9;
+      case "greedy": return 1.2;
+      case "suspicious": return 1.15;
+      default: return 1.0;
+    }
+  }
+
+  function generateShopInventory(){
+    const lvl = parseInt($("#traderLevel").value,10);
+    const mood = $("#moodSelect").value;
+    let items = buildPool().filter(i => i.type!=="story");
+    // Scale quantity and rarity with level
+    const count = clamp(3 + Math.floor(lvl/2), 4, 20);
+    const weightKey = lvl>=15 ? "rare" : lvl>=8 ? "balanced" : "common";
+    const inv = [];
+    for(let i=0;i<count;i++){
+      const base = pickByRarity(items, weightKey);
+      const mod = priceModFromMood(mood);
+      const event = $("#dailyEventText").textContent;
+      let note = "";
+      let price = base.basePrice || 10;
+      if(event.includes("consumables") && base.type==="consumable"){ price *= 0.9; note="Daily sale -10%"; }
+      if(event.includes("weapons") && base.type==="weapon"){ price *= 0.85; note="Blacksmith overstock -15%"; }
+      if(event.includes("scrolls") && base.type==="scroll"){ price *= 1.2; note="Arcane shortage +20%"; }
+      price *= mod;
+      inv.push({...base, price, note});
+    }
+    STATE.shop.inventory = inv;
+    STATE.shop.traderLevel = lvl;
+    saveState();
+    renderShop();
+  }
+
+  $("#genShopBtn").addEventListener("click", generateShopInventory);
+  $("#refreshSaleBtn").addEventListener("click", rollDailyEvent);
+
+  // Sell / Trade appraisal
+  function appraise(){
+    const name = $("#sellItemName").value.trim();
+    const base = parseFloat($("#sellItemBase").value);
+    const mood = $("#moodSelect").value;
+    const cha = parseInt($("#chaMod").value,10);
+    if(!name || isNaN(base) || base<=0){ $("#sellOffer").textContent = "Enter a valid name and base price."; return; }
+    // Offer influenced by mood and charisma, plus randomness
+    const moodBase = {friendly:0.7, neutral:0.6, greedy:0.45, suspicious:0.5}[mood] || 0.6;
+    const chaBonus = clamp(cha * 0.02, -0.1, 0.15);
+    const variance = (rand()*0.1) - 0.05;
+    let offer = base * (moodBase + chaBonus + variance);
+    offer = Math.max(1, Math.round(offer));
+    $("#sellOffer").textContent = `Offer for "${name}": ${offer}g`;
+    $("#sellOffer").dataset.offer = offer;
+  }
+  $("#sellCalcBtn").addEventListener("click", appraise);
+
+  $("#completeSaleBtn").addEventListener("click", ()=>{
+    const offer = parseInt($("#sellOffer").dataset.offer || "0",10);
+    if(!offer){ alert("Appraise an item first."); return; }
+    let traderGold = parseInt($("#traderGoldRead").textContent,10);
+    if(traderGold < offer){ alert("Trader doesn't have enough gold."); return; }
+    const p = getSelectedPlayer();
+    if(!p){ alert("Select a player (Players tab)."); return; }
+    traderGold -= offer; $("#traderGoldRead").textContent = traderGold;
+    STATE.shop.traderGold = traderGold;
+    p.gold += offer;
+    STATE.history.push({ts:Date.now(), kind:"sell", details:`${p.name} sold item for ${offer}g`});
+    saveState();
+    renderPlayers();
+    alert(`${p.name} received ${offer}g.`);
+  });
+
+  // ---------- DM Tools ----------
+  $("#addStoryItemBtn").addEventListener("click", ()=>{
+    const name = $("#storyItem").value.trim();
+    if(!name) return;
+    STATE.dm.storyItems.push(name);
+    $("#storyItem").value="";
+    saveState(); renderStoryItems();
+  });
+  function renderStoryItems(){
+    const box = $("#storyItemsList");
+    if(!STATE.dm.storyItems.length){ box.textContent = "No story items yet."; return; }
+    box.innerHTML = STATE.dm.storyItems.map((n,i)=>`<div class="row small"><span class="pill">${n}</span><button class="btn ghost small" data-del="${i}">remove</button></div>`).join("");
+    box.querySelectorAll("[data-del]").forEach(b=> b.addEventListener("click", e=>{
+      const i = parseInt(e.currentTarget.dataset.del,10);
+      STATE.dm.storyItems.splice(i,1); saveState(); renderStoryItems();
+    }));
+  }
+  renderStoryItems();
+
+  $("#genLockBtn").addEventListener("click", ()=>{
+    const locks = ["DC 12 simple lock","DC 15 sturdy dwarven lock","DC 17 arcane lattice (requires dispel)","Puzzle dial (INT check DC 14)"];
+    $("#trapArea").innerHTML = `<div class="pill">Lock: ${choice(locks)}</div>`;
+  });
+  $("#genTrapBtn").addEventListener("click", ()=>{
+    const traps = [
+      "Poison needle trap (DC 13 to spot/disable, 2d6 poison)",
+      "Shadowflare glyph (DEX save DC 14, 2d8 fire+necrotic)",
+      "Falling net (STR DC 12 to break)",
+      "Mimic chest (initiate encounter of CR 2)"
+    ];
+    $("#trapArea").innerHTML += `<div class="pill">Trap: ${choice(traps)}</div>`;
+  });
+
+  $("#rollInitBtn").addEventListener("click", ()=>{
+    const names = $("#enemyNames").value.split(",").map(s=>s.trim()).filter(Boolean);
+    if(!names.length){ $("#initResults").textContent="Add enemy names first."; return; }
+    const results = names.map(n=>({n, r: roll(20)})).sort((a,b)=>b.r-a.r);
+    $("#initResults").innerHTML = results.map(r=>`<span class="pill">${r.n}: <b>${r.r}</b></span>`).join(" ");
+  });
+
+  // DM secrets
+  const dmScratch = $("#dmScratch");
+  dmScratch.value = STATE.dm.notes || "";
+  dmScratch.addEventListener("input", ()=>{ STATE.dm.notes = dmScratch.value; saveState(); });
+  $("#exportSecretsBtn").addEventListener("click", ()=>{
+    downloadJSON({notes:STATE.dm.notes, storyItems:STATE.dm.storyItems}, "dm_secrets.json");
+  });
+  $("#clearSecretsBtn").addEventListener("click", ()=>{ if(confirm("Clear DM notes?")) { STATE.dm.notes=""; dmScratch.value=""; saveState(); }});
+
+  // ---------- Custom Pools ----------
+  function refreshPoolsUI(){
+    const sel = $("#activePoolSelect");
+    sel.innerHTML = `<option value="">(none)</option>` + Object.keys(STATE.pools).map(k=>`<option value="${k}" ${STATE.activePool===k?'selected':''}>${k}</option>`).join("");
+    if(STATE.activePool && STATE.pools[STATE.activePool]){
+      $("#poolPreview").textContent = `${STATE.pools[STATE.activePool].length} items active.`;
+    } else {
+      $("#poolPreview").textContent = "No pool selected.";
+    }
+  }
+  $("#savePoolBtn").addEventListener("click", ()=>{
+    const name = $("#poolName").value.trim() || `Pool ${Object.keys(STATE.pools).length+1}`;
+    let items;
+    try{
+      items = JSON.parse($("#poolJson").value);
+      if(!Array.isArray(items)) throw new Error("Not an array");
+    }catch(e){ alert("Invalid JSON array."); return; }
+    // validate minimal shape
+    items = items.map(it => ({
+      name: String(it.name || "Unnamed"),
+      type: String(it.type || "trinket"),
+      rarity: String(it.rarity || "uncommon"),
+      basePrice: Number(it.basePrice || 10),
+      themes: Array.isArray(it.themes)? it.themes : ["general"]
+    }));
+    STATE.pools[name] = items;
+    STATE.activePool = name;
+    saveState(); refreshPoolsUI();
+    alert(`Saved pool "${name}" with ${items.length} items.`);
+  });
+  $("#activePoolSelect").addEventListener("change", (e)=>{
+    STATE.activePool = e.target.value || "";
+    saveState(); refreshPoolsUI();
+  });
+  $("#exportPoolsBtn").addEventListener("click", ()=>{
+    downloadJSON(STATE.pools, "loot_pools.json");
+  });
+  $("#clearPoolsBtn").addEventListener("click", ()=>{
+    if(confirm("Delete all custom pools?")){ STATE.pools={}; STATE.activePool=""; saveState(); refreshPoolsUI(); }
+  });
+  $("#importDemoPoolBtn").addEventListener("click", ()=>{
+    const demo = [
+      {name:"Veilpiercer Twin — Sunstoker", type:"weapon", rarity:"very-rare", basePrice:2000, themes:["dragon_cult","dungeon"]},
+      {name:"Umbria's Ember Sigil", type:"trinket", rarity:"rare", basePrice:800, themes:["dragon_cult"]},
+      {name:"Shadowweave Scrip", type:"scroll", rarity:"rare", basePrice:600, themes:["underdark"]}
+    ];
+    $("#poolJson").value = JSON.stringify(demo, null, 2);
+  });
+  refreshPoolsUI();
+
+  // ---------- History ----------
+  function renderHistory(){
+    const box = $("#historyArea");
+    if(!STATE.history.length){ box.textContent = "No history yet."; return; }
+    box.innerHTML = STATE.history.map(h=>{
+      const d = new Date(h.ts).toLocaleString();
+      return `<div class="log-entry"><span class="muted small">${d}</span> — ${h.kind}: ${h.details}</div>`;
+    }).join("");
+  }
+  $("#exportHistoryBtn").addEventListener("click", ()=> downloadJSON(STATE.history, "history.json"));
+  $("#clearHistoryBtn").addEventListener("click", ()=>{ if(confirm("Clear history?")){ STATE.history=[]; saveState(); renderHistory(); } });
+
+  // ---------- Settings ----------
+  $("#dmModeToggle").checked = STATE.dm.mode;
+  $("#curseToggle").checked = !!STATE.settings.curse;
+  $("#seedInput").value = STATE.settings.seed || "";
+
+  function applyDmMode(){
+    const dm = $("#dmModeToggle").checked;
+    STATE.dm.mode = dm; saveState();
+    // Hide DM-only bits in non-DM mode (story items in loot log will still be hidden unless revealed)
+    $('[data-view="dm"]').style.display = dm ? "" : "";
+    // In non-DM mode, hide DM notes in log via CSS class (already subtle)
+  }
+  $("#dmModeToggle").addEventListener("change", applyDmMode);
+  $("#saveSettingsBtn").addEventListener("click", ()=>{
+    STATE.settings.seed = $("#seedInput").value.trim();
+    _seedStr = STATE.settings.seed;
+    STATE.settings.curse = $("#curseToggle").checked;
+    saveState();
+    alert("Settings saved. Seed affects future rolls.");
+  });
+  $("#resetAllBtn").addEventListener("click", ()=>{
+    if(confirm("Reset EVERYTHING? This clears local data.")){
+      localStorage.clear(); location.reload();
+    }
+  });
+
+  // ---------- Player controls ----------
+  $("#addPlayerBtn").addEventListener("click", ()=>{
+    const name = $("#newPlayerName").value.trim();
+    if(!name) return;
+    STATE.players.push({name, gold:0, items:[]});
+    $("#newPlayerName").value="";
+    saveState(); renderPlayers();
+  });
+  $("#removePlayerBtn").addEventListener("click", ()=>{
+    const idx = selectedPlayerIndex();
+    if(idx<0) return;
+    if(confirm("Remove selected player?")){ STATE.players.splice(idx,1); saveState(); renderPlayers(); }
+  });
+  $("#grantGoldBtn").addEventListener("click", ()=>{
+    const p = getSelectedPlayer(); if(!p) return alert("Select a player first.");
+    p.gold += 50; saveState(); renderPlayers();
+  });
+  $("#removeItemBtn").addEventListener("click", ()=>{
+    const p = getSelectedPlayer(); if(!p) return alert("Select a player first.");
+    p.items.pop(); saveState(); renderPlayers();
+  });
+  $("#exportInventoriesBtn").addEventListener("click", ()=>{
+    const data = Object.fromEntries(STATE.players.map(p=>[p.name,{gold:p.gold, items:p.items}]));
+    downloadJSON(data, "inventories.json");
+  });
+
+  // ---------- Exports ----------
+  $("#exportLogBtn").addEventListener("click", ()=> downloadJSON(STATE.lootLog, "loot_log.json"));
+  $("#clearLogBtn").addEventListener("click", ()=>{ if(confirm("Clear log?")){ STATE.lootLog=[]; saveState(); renderLog(); }});
+
+  function downloadJSON(obj, filename){
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Initialize some views
+  renderPlayers();
+  $("#traderGoldRead").textContent = STATE.shop.traderGold;
+  applyDmMode();
+})();
+</script>
+</body>
+</html>
